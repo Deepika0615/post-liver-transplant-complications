@@ -1,33 +1,60 @@
+'''CRISP-ML(Q):
+    
+Business Problem:
+After liver transplant surgery, many patients are experiencing a lot of post surgery complications such as kidneys might dysfunction, Post transplant diabetes, Aretery thrombosis etc
+Business Objective: Maximize early detection of complications.
+Business Constraints: Minimize the patients who have no risk.
+
+Success Criteria: 
+Business success criteria: Increase the detection of complications by at least 98%.
+Machine Learning success criteria: Achieve an accuracy of atleast 98%
+Economic success criteria: Reducing medical expenses will improve trust of patients by atleast 30%.
+
+Data Collection:
+The data has 1974 rows and 36 columns.'''
+
+# Importing all the necessary libraries
+
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+import matplotlib as plt
 
 from feature_engine.outliers import Winsorizer
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import MinMaxScaler
 
-from sklearn_pandas import DataFrameMapper
 from sklearn.compose import ColumnTransformer
 
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import accuracy_score
 
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_selection import RFE
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.model_selection import GridSearchCV
 from imblearn.over_sampling import SMOTE
-
-
-
-import sklearn.metrics as skmet
 import joblib
 import pickle
 
+# MySQL Database connection
+from sqlalchemy import create_engine, text
+
 liverT = pd.read_csv(r"E:\project\project 1\LiverT_dataset1.csv")
+liverT.dtypes
+
+# Creating engine which connect to MySQL
+user = 'user3' # user name
+pw = 'user3' # password
+db = 'liver_transplant' # database
+
+# creating engine to connect database
+engine = create_engine(f"mysql+pymysql://{user}:{pw}@localhost/{db}")
+
+# loading data from database
+sql = 'select * from liverT'
+
+print(liverT)
 
 # Convert empty strings to NaN
 liverT['RBloodTransfusion'] = liverT['RBloodTransfusion'].replace('', np.nan)
@@ -68,12 +95,17 @@ impute_data = preprocessor.fit(X)
 
 
 # Save the pipeline
-joblib.dump(impute_data, 'E:\project\project 108\final model\impute')
+joblib.dump(impute_data, 'E:/project/project 108/final/impute')
 
 # Transform the original dat
 num_data = pd.DataFrame(impute_data.transform(X), columns = numeric_features) 
 
 num_data.isna().sum()
+
+import seaborn as sns
+print(sns.boxplot(X.RNa))
+print(sns.boxplot(X.RMg))
+
 
 winsor = Winsorizer(capping_method = 'iqr', # choose  IQR rule boundaries or gaussian for mean and std
                           tail = 'both', # cap left, right or both tails 
@@ -90,15 +122,17 @@ preprocessor1 = ColumnTransformer(transformers = [('wins', outlier_pipeline, num
 winz_data = preprocessor1.fit(num_data)
 
 # Save the pipeline
-joblib.dump(winz_data, 'E:\project\project 108\final model\winsor')
+ joblib.dump(winz_data, 'E:/project/project 108/final/winsor')
 
 # Transform the original data
 outlier_data = pd.DataFrame(winz_data.transform(num_data), columns = numeric_features) 
 outlier_data
 
+import matplotlib.pyplot as plt
+
 import seaborn as sns
-print(sns.boxplot(outlier_data.RNa))
 print(sns.boxplot(outlier_data.RMg))
+print(sns.boxplot(outlier_data.RNa))
 
 # Scale pipeline
 scale_pipeline = Pipeline([('scale', MinMaxScaler())])
@@ -110,7 +144,7 @@ preprocessor2 = ColumnTransformer([('scale', scale_pipeline, numeric_features)])
 scale = preprocessor2.fit(num_data)
 
 # Save the MinMaxScaler Model
-joblib.dump(scale, 'E:\project\project 108\final model\minmax')
+ joblib.dump(scale, 'E:/project/project 108/final/minmax')
 
 # Transform the original data
 scaled_data = pd.DataFrame(scale.transform(num_data), columns = numeric_features)
@@ -126,7 +160,7 @@ preprocessor3 = ColumnTransformer([('categorical', encoding_pipeline, categorica
 onehot = preprocessor3.fit(X)
 
 # Save the Encoding model
-joblib.dump(onehot,'E:\project\project 108\final model\encoding')
+ joblib.dump(onehot,'E:/project/project 108/final/encoding')
 
 # Transform the original data
 encode_data = pd.DataFrame(onehot.transform(X),columns = onehot.get_feature_names_out())
@@ -139,10 +173,12 @@ clean_data
 X_train, X_test, Y_train, Y_test = train_test_split(clean_data, Y, test_size = 0.2, stratify = Y, random_state = 0) 
 
 
+
+# SMOTE 
+
 from imblearn.over_sampling import SMOTE
 from sklearn.metrics import classification_report
 
-# SMOTE 
 smote = SMOTE(random_state=0)
 X_train_resampled, Y_train_resampled = smote.fit_resample(X_train, Y_train)
 
@@ -204,15 +240,8 @@ print("Best Model Precision:", best_model_precision)
 print("Best Model Recall:", best_model_recall)
 print("Best Model F1-score:", best_model_f1)
 
+
 # 2 using rfe 
-
-from sklearn.linear_model import LogisticRegression
-from sklearn.feature_selection import RFE
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from sklearn.model_selection import GridSearchCV
-from imblearn.over_sampling import SMOTE
-
-
 # Apply Recursive Feature Elimination
 logmodel = LogisticRegression(multi_class="multinomial", solver="newton-cg")
 rfe = RFE(logmodel, n_features_to_select=10)
@@ -242,8 +271,7 @@ print("Recall:", recall)
 print("F1-score:", f1)
 
 # Save the model
-import pickle
-pickle.dump(rfe, open('E:\project\project 108\final model\model.pkl', 'wb'))
+pickle.dump(rfe, open('E:/project/project 108/final/model.pkl', 'wb'))
 
 # Define the parameter grid for grid search
 param_grid = {
@@ -279,13 +307,13 @@ print("Best Score:", grid_search.best_score_)
 
 # Predictions on New Data
 
-model = pickle.load(open('E:\project\project 108\final model\model.pkl', 'rb'))
-impute = joblib.load('E:\project\project 108\final model\impute')
-winzor = joblib.load('E:\project\project 108\final model\winsor')
-minmax = joblib.load('E:\project\project 108\final model\minmax')
-onehot = joblib.load('E:\project\project 108\final model\encoding')
+model = pickle.load(open('E:/project/project 108/final/model.pkl', 'rb'))
+impute = joblib.load('E:/project/project 108/final/impute')
+winzor = joblib.load('E:/project/project 108/final/winsor')
+minmax = joblib.load('E:/project/project 108/final/minmax')
+onehot = joblib.load('E:/project/project 108/final/encoding')
 
-data = pd.read_csv(r"C:/Users/Lenovo/test.csv")
+data = pd.read_csv(r"C:/Users/Lenovo/MLtest1.csv")
 data.shape
 numeric_features = data.select_dtypes(exclude = ['object']).columns
 
